@@ -14,7 +14,11 @@ import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/scan")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {
+    "http://localhost:3000",
+    "https://codesentry-ui.vercel.app",
+    "*"
+})
 public class ScanController {
 
     private final CodeAnalyzerService analyzerService;
