@@ -1,5 +1,6 @@
 package com.codesentry.service;
 
+import java.util.List;
 import com.codesentry.model.CodeIssue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class LLMService {
@@ -77,41 +80,43 @@ public class LLMService {
     }
 
     private String callGemini(String prompt) throws Exception {
-        String requestBody = """
-                {
-                  "contents": [
-                    {
-                      "parts": [
-                        {
-                          "text": %s
-                        }
-                      ]
-                    }
-                  ],
-                  "generationConfig": {
-                    "temperature": 0.3,
-                    "maxOutputTokens": 400
-                  }
-                }
-                """.formatted(objectMapper.writeValueAsString(prompt));
+    // Build request body safely using ObjectMapper
+    // This handles all special characters automatically
+    ObjectMapper mapper = new ObjectMapper();
+    
+    Map<String, Object> part = new HashMap<>();
+    part.put("text", prompt);
+    
+    Map<String, Object> content = new HashMap<>();
+    content.put("parts", List.of(part));
+    
+    Map<String, Object> generationConfig = new HashMap<>();
+    generationConfig.put("temperature", 0.3);
+    generationConfig.put("maxOutputTokens", 400);
+    
+    Map<String, Object> requestMap = new HashMap<>();
+    requestMap.put("contents", List.of(content));
+    requestMap.put("generationConfig", generationConfig);
+    
+    String requestBody = mapper.writeValueAsString(requestMap);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(apiUrl.trim() + "?key=" + apiKey.trim()))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-                .timeout(Duration.ofSeconds(30))
-                .build();
+    HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiUrl.trim() + "?key=" + apiKey.trim()))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .timeout(Duration.ofSeconds(30))
+            .build();
 
-        HttpResponse<String> response = httpClient.send(
-                request, HttpResponse.BodyHandlers.ofString());
+    HttpResponse<String> response = httpClient.send(
+            request, HttpResponse.BodyHandlers.ofString());
 
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("Gemini API returned HTTP "
-                    + response.statusCode() + ": " + response.body());
-        }
-
-        return response.body();
+    if (response.statusCode() != 200) {
+        throw new RuntimeException("Gemini API returned HTTP "
+                + response.statusCode() + ": " + response.body());
     }
+
+    return response.body();
+}
 
     private String extractTextFromResponse(String responseJson) throws Exception {
         JsonNode root = objectMapper.readTree(responseJson);
