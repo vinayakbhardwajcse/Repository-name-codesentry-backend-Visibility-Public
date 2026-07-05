@@ -1,6 +1,5 @@
 package com.codesentry.service;
 
-import java.util.List;
 import com.codesentry.model.CodeIssue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +12,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -52,71 +52,58 @@ public class LLMService {
     }
 
     private String buildPrompt(CodeIssue issue) {
-        return """
-                You are a Java code review assistant. Analyze this code issue and respond ONLY with
-                a valid JSON object - no markdown, no backticks, no preamble. Just raw JSON.
-
-                Issue details:
-                - Rule: %s
-                - Title: %s
-                - Description: %s
-                - Severity: %s
-                - Code snippet: %s
-                - Found in method: %s
-
-                Respond with exactly this JSON structure:
-                {
-                  "explanation": "2-3 sentence plain English explanation of why this is problematic",
-                  "suggestedFix": "the corrected version of the code snippet"
-                }
-                """.formatted(
-                issue.getRuleId(),
-                issue.getTitle(),
-                issue.getDescription(),
-                issue.getSeverity(),
-                issue.getCodeSnippet() != null ? issue.getCodeSnippet() : "not available",
-                issue.getLocation() != null ? issue.getLocation() : "unknown"
-        );
+        return "You are a Java code review assistant. Analyze this code issue and respond ONLY with "
+                + "a valid JSON object - no markdown, no backticks, no preamble. Just raw JSON.\n\n"
+                + "Issue details:\n"
+                + "- Rule: " + issue.getRuleId() + "\n"
+                + "- Title: " + issue.getTitle() + "\n"
+                + "- Description: " + issue.getDescription() + "\n"
+                + "- Severity: " + issue.getSeverity() + "\n"
+                + "- Code snippet: " + (issue.getCodeSnippet() != null ? issue.getCodeSnippet() : "not available") + "\n"
+                + "- Found in method: " + (issue.getLocation() != null ? issue.getLocation() : "unknown") + "\n\n"
+                + "Respond with exactly this JSON structure:\n"
+                + "{\"explanation\": \"2-3 sentence plain English explanation of why this is problematic\","
+                + "\"suggestedFix\": \"the corrected version of the code snippet\"}";
     }
 
     private String callGemini(String prompt) throws Exception {
-    // Build request body safely using ObjectMapper
-    // This handles all special characters automatically
-    ObjectMapper mapper = new ObjectMapper();
-    
-    Map<String, Object> part = new HashMap<>();
-    part.put("text", prompt);
-    
-    Map<String, Object> content = new HashMap<>();
-    content.put("parts", List.of(part));
-    
-    Map<String, Object> generationConfig = new HashMap<>();
-    generationConfig.put("temperature", 0.3);
-    generationConfig.put("maxOutputTokens", 400);
-    
-    Map<String, Object> requestMap = new HashMap<>();
-    requestMap.put("contents", List.of(content));
-    requestMap.put("generationConfig", generationConfig);
-    
-    String requestBody = mapper.writeValueAsString(requestMap);
+        Map<String, Object> part = new HashMap<>();
+        part.put("text", prompt);
 
-    HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiUrl.trim() + "?key=" + apiKey.trim()))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-            .timeout(Duration.ofSeconds(30))
-            .build();
+        Map<String, Object> content = new HashMap<>();
+        content.put("parts", List.of(part));
 
-    HttpResponse<String> response = httpClient.send(
-            request, HttpResponse.BodyHandlers.ofString());
+        Map<String, Object> generationConfig = new HashMap<>();
+        generationConfig.put("temperature", 0.3);
+        generationConfig.put("maxOutputTokens", 400);
 
-    if (response.statusCode() != 200) {
-        throw new RuntimeException("Gemini API returned HTTP "
-                + response.statusCode() + ": " + response.body());
+        Map<String, Object> requestMap = new HashMap<>();
+        requestMap.put("contents", List.of(content));
+        requestMap.put("generationConfig", generationConfig);
+
+        String requestBody = objectMapper.writeValueAsString(requestMap);
+
+        System.out.println("=== LLMService: Sending request to Gemini");
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(apiUrl.trim() + "?key=" + apiKey.trim()))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .timeout(Duration.ofSeconds(30))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request, HttpResponse.BodyHandlers.ofString());
+
+        System.out.println("=== LLMService: Gemini responded with status " + response.statusCode());
+
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Gemini API returned HTTP "
+                    + response.statusCode() + ": " + response.body());
+        }
+
+        return response.body();
     }
-
-    return response.body();
-}
 
     private String extractTextFromResponse(String responseJson) throws Exception {
         JsonNode root = objectMapper.readTree(responseJson);

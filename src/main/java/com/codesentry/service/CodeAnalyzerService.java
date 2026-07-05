@@ -65,15 +65,20 @@ public class CodeAnalyzerService {
         int enrichmentCount = 0;
 
         for (CodeIssue issue : allIssues) {
-            System.out.println("=== Enriching: " + issue.getRuleId());
-            if (enrichmentCount < 10) {
-                enrichedIssues.add(llmService.enrich(issue));
-                enrichmentCount++;
-            } else {
-                enrichedIssues.add(issue);
-            }
+    System.out.println("=== Enriching: " + issue.getRuleId());
+    if (enrichmentCount < 10) {
+        enrichedIssues.add(llmService.enrich(issue));
+        enrichmentCount++;
+        // Add small delay to avoid rate limiting
+        try {
+            Thread.sleep(1000); // 1 second delay between calls
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
-
+    } else {
+        enrichedIssues.add(issue);
+    }
+}
         Map<Severity, Long> bySeverity = new EnumMap<>(Severity.class);
         for (Severity s : Severity.values()) bySeverity.put(s, 0L);
         for (CodeIssue i : enrichedIssues) bySeverity.merge(i.getSeverity(), 1L, Long::sum);
