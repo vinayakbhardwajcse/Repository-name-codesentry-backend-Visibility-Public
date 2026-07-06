@@ -71,7 +71,7 @@ public class CodeAnalyzerService {
         enrichmentCount++;
         // Add small delay to avoid rate limiting
         try {
-            Thread.sleep(1000); // 1 second delay between calls
+            Thread.sleep(500); // 1 second delay between calls
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
