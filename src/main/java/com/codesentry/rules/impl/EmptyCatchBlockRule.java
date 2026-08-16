@@ -1,3 +1,4 @@
+// Test change to trigger GitHub Actions workflow
 package com.codesentry.rules.impl;
 
 import com.codesentry.model.CodeIssue;
