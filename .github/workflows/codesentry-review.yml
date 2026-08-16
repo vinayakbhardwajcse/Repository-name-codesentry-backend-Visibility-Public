@@ -1,0 +1,62 @@
+name: CodeSentry AI Code Review
+
+on:
+  pull_request:
+    paths:
+      - '**/*.java'
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get changed Java files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: '**/*.java'
+
+      - name: Scan changed files with CodeSentry
+        if: steps.changed-files.outputs.any_changed == 'true'
+        run: |
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            echo "Scanning: $file"
+            RESPONSE=$(curl -s -X POST https://codesentry-backend-ztuy.onrender.com/api/scan/text \
+              -H "Content-Type: application/json" \
+              -d "{\"fileName\": \"$(basename $file)\", \"sourceCode\": $(python3 -c "import json,sys; print(json.dumps(open('$file').read()))")}")
+            echo "$RESPONSE" > "scan_result_$(basename $file).json"
+          done
+
+      - name: Post results as PR comment
+        if: steps.changed-files.outputs.any_changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const files = fs.readdirSync('.').filter(f => f.startsWith('scan_result_'));
+            let comment = '## 🔍 CodeSentry AI Code Review\n\n';
+
+            for (const file of files) {
+              const result = JSON.parse(fs.readFileSync(file, 'utf8'));
+              comment += `### 📄 ${result.fileName}\n`;
+              comment += `**Health Score:** ${result.healthScore}/100\n\n`;
+
+              if (result.issues.length === 0) {
+                comment += '✅ No issues found!\n\n';
+              } else {
+                comment += `Found ${result.issues.length} issue(s):\n\n`;
+                for (const issue of result.issues) {
+                  comment += `- **[${issue.severity}]** ${issue.title} (line ${issue.line})\n`;
+                }
+                comment += '\n';
+              }
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
